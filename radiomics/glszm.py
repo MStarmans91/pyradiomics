@@ -97,7 +97,8 @@ class RadiomicsGLSZM(base.RadiomicsFeaturesBase):
     GrayLevels = self.coefficients['grayLevels']  # Gray values present in ROI
     emptyGrayLevels = numpy.array(list(set(NgVector) - set(GrayLevels)), dtype=int)  # Gray values NOT present in ROI
 
-    P_glszm = numpy.delete(P_glszm, emptyGrayLevels - 1, 1)
+    if list(emptyGrayLevels):
+        P_glszm = numpy.delete(P_glszm, emptyGrayLevels - 1, 1)
 
     return P_glszm
 

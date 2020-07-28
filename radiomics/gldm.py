@@ -100,7 +100,8 @@ class RadiomicsGLDM(base.RadiomicsFeaturesBase):
     GrayLevels = self.coefficients['grayLevels']  # Gray values present in ROI
     emptyGrayLevels = numpy.array(list(set(NgVector) - set(GrayLevels)), dtype=int)  # Gray values NOT present in ROI
 
-    P_gldm = numpy.delete(P_gldm, emptyGrayLevels - 1, 1)
+    if list(emptyGrayLevels):
+        P_gldm = numpy.delete(P_gldm, emptyGrayLevels - 1, 1)
 
     jvector = numpy.arange(1, P_gldm.shape[2] + 1, dtype='float64')
 

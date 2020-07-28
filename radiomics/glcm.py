@@ -145,8 +145,9 @@ class RadiomicsGLCM(base.RadiomicsFeaturesBase):
     GrayLevels = self.coefficients['grayLevels']  # Gray values present in ROI
     emptyGrayLevels = numpy.array(list(set(NgVector) - set(GrayLevels)), dtype=int)  # Gray values NOT present in ROI
 
-    P_glcm = numpy.delete(P_glcm, emptyGrayLevels - 1, 1)
-    P_glcm = numpy.delete(P_glcm, emptyGrayLevels - 1, 2)
+    if list(emptyGrayLevels):
+        P_glcm = numpy.delete(P_glcm, emptyGrayLevels - 1, 1)
+        P_glcm = numpy.delete(P_glcm, emptyGrayLevels - 1, 2)
 
     # Optionally make GLCMs symmetrical for each angle
     if self.symmetricalGLCM:

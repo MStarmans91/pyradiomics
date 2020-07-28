@@ -109,7 +109,8 @@ class RadiomicsNGTDM(base.RadiomicsFeaturesBase):
 
     # Delete empty grey levels
     emptyGrayLevels = numpy.where(numpy.sum(P_ngtdm[:, :, 0], 0) == 0)
-    P_ngtdm = numpy.delete(P_ngtdm, emptyGrayLevels, 1)
+    if list(emptyGrayLevels):
+        P_ngtdm = numpy.delete(P_ngtdm, emptyGrayLevels, 1)
 
     return P_ngtdm
 
