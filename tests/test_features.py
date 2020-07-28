@@ -6,59 +6,77 @@ import logging
 import os
 
 from nose_parameterized import parameterized
+import six
 
-from radiomics.featureextractor import RadiomicsFeaturesExtractor
+from radiomics import getFeatureClasses
 from testUtils import custom_name_func, RadiomicsTestUtils
 
 testUtils = RadiomicsTestUtils()
-testCases = testUtils.getTestCases()
-
-extractor = RadiomicsFeaturesExtractor()
+tests = sorted(testUtils.getTests())
 
 featureClass = None
+featureClasses = getFeatureClasses()
 
 
 class TestFeatures:
+
   def generate_scenarios():
-    global testCases
-    global extractor
+    global tests, featureClasses
 
-    for testCase in testCases:
-      for featureClassName in extractor.getFeatureClassNames():
-        featureNames = extractor.featureClasses[featureClassName].getFeatureNames()
-        assert (featureNames is not None)
-        assert (len(featureNames) > 0)
-        logging.debug('generate_scenarios: featureNames = %s', featureNames)
-        for featureName in featureNames:
-          yield testCase, featureClassName, featureName
+    for test in tests:
+      for featureClassName in featureClasses:
+        # Get all feature names for which there is a baseline with current test case
+        # Raises an assertion error when the class is not yet present in the baseline
+        # Returns None if no baseline is present for this specific test case
+        # Returns a list of feature names for which baseline values are present for this test
+        baselineFeatureNames = testUtils.getFeatureNames(featureClassName, test)
 
-  global testUtils
+        if baselineFeatureNames is None:
+          continue
+        assert (len(baselineFeatureNames) > 0)
+
+        uniqueFeatures = set([f.split('_')[-1] for f in baselineFeatureNames])
+
+        # Get a list of all features for current class
+        featureNames = featureClasses[featureClassName].getFeatureNames()
+        # Get a list of all non-deprecated features
+        activeFeatures = set([f for (f, deprecated) in six.iteritems(featureNames) if not deprecated])
+        # Check if all active features have a baseline (exclude deprecated features from this set)
+        if len(activeFeatures - uniqueFeatures) > 0:
+          raise AssertionError('Missing baseline for active features %s', activeFeatures - uniqueFeatures)
+        if len(uniqueFeatures - activeFeatures) > 0:
+          raise AssertionError('Missing function(s) for baseline feature(s) %s', uniqueFeatures - activeFeatures)
+
+        logging.debug('generate_scenarios: featureNames = %s', baselineFeatureNames)
+        for featureName in baselineFeatureNames:
+          yield test, featureName
 
   @parameterized.expand(generate_scenarios(), testcase_func_name=custom_name_func)
-  def test_scenario(self, testCase, featureClassName, featureName):
+  def test_scenario(self, test, featureName):
     print("")
-    global testUtils
-    global extractor
+    global testUtils, featureClass, featureClasses
 
-    logging.debug('test_scenario: testCase = %s, featureClassName = %s, featureName = %s', testCase, featureClassName,
-                  featureName)
+    featureName = featureName.split('_')
 
-    testCaseOrClassChanged = testUtils.setFeatureClassAndTestCase(featureClassName, testCase)
+    logging.debug('test_scenario: test = %s, featureClassName = %s, featureName = %s', test, featureName[1],
+                  featureName[-1])
 
-    global featureClass
-    testImage = testUtils.getImage()
-    testMask = testUtils.getMask()
-    if featureClass is None or testCaseOrClassChanged:
-      logging.debug('Init %s' % (featureClassName))
-      featureClass = extractor.featureClasses[featureClassName](testImage, testMask, **testUtils.getKwargs())
+    testOrClassChanged = testUtils.setFeatureClassAndTestCase(featureName[1], test)
+
+    testImage = testUtils.getImage(featureName[0])
+    testMask = testUtils.getMask(featureName[0])
+
+    if featureClass is None or testOrClassChanged:
+      logging.debug('Init %s' % featureName[1])
+      featureClass = featureClasses[featureName[1]](testImage, testMask, **testUtils.getSettings())
 
     assert (featureClass is not None)
 
     featureClass.disableAllFeatures()
-    featureClass.enableFeatureByName(featureName)
-    featureClass.calculateFeatures()
+    featureClass.enableFeatureByName(featureName[-1])
+    featureClass.execute()
     # get the result and test it
-    val = featureClass.featureValues[featureName]
+    val = featureClass.featureValues[featureName[-1]]
     testUtils.checkResult(featureName, val)
 
 

@@ -6,8 +6,6 @@ mapping:
   setting: &settings
     type: map
     mapping:
-      enableCExtensions:
-        type: bool
       minimumROIDimensions:
         type: int
         range:
@@ -17,12 +15,28 @@ mapping:
         type: int
         range:
           min-ex: 0
+      geometryTolerance:
+        type: float
+        range:
+          min-ex: 0
+      correctMask:
+        type: bool
       additionalInfo:
         type: bool
       label:
         type: int
+        range:
+          min-ex: 0
+      label_channel:
+        type: int
+        range:
+          min: 0
       binWidth:
         type: float
+        range:
+          min-ex: 0
+      binCount:
+        type: int
         range:
           min-ex: 0
       normalize:
@@ -37,9 +51,9 @@ mapping:
           min-ex: 0
       resampledPixelSpacing:
         seq:
-          - type: int
+          - type: float
             range:
-              min-ex: 0
+              min: 0
       interpolator:
         type: any
         func: checkInterpolator
@@ -59,6 +73,16 @@ mapping:
         range:
           min: 0
           max: 2
+      resegmentRange:
+        seq:
+          - type: float
+      resegmentMode:
+        type: str
+        enum: ['absolute', 'relative', 'sigma']
+      resegmentShape:
+        type: bool
+      preCrop:
+        type: bool
       sigma:
         seq:
           - type: float
@@ -75,6 +99,31 @@ mapping:
       wavelet:
         type: str
         func: checkWavelet
+      gradientUseSpacing:
+        type: bool
+      lbp2DRadius:
+        type: float
+        range:
+          min-ex: 0
+      lbp2DSamples:
+        type: int
+        range:
+          min: 1
+      lbp2DMethod:
+        type: str
+        enum: ['default', 'ror', 'uniform', 'var']
+      lbp3DLevels:
+        type: int
+        range:
+          min: 1
+      lbp3DIcosphereRadius:
+        type: float
+        range:
+          min-ex: 0
+      lbp3DIcosphereSubdivision:
+        type: int
+        range:
+          min: 0
       voxelArrayShift:
         type: int
       symmetricalGLCM:
@@ -86,6 +135,23 @@ mapping:
         type: int
         range:
           min: 0
+
+  voxelSetting:
+    type: map
+    mapping:
+      kernelRadius:
+        type: int
+        range:
+          min-ex: 0
+      maskedKernel:
+        type: bool
+      initValue:
+        type: float
+      voxelBatch:
+        type: int
+        range:
+          min-ex: 0
+
   featureClass:
     type: map
     func: checkFeatureClass
@@ -94,14 +160,9 @@ mapping:
       regex;(.+):
         type: any
 
-  inputImage:
+  imageType:
     type: map
+    func: checkImageType
+    matching-rule: 'any'
     mapping:
-      # possible image filters, it's value is a dictionary that follows the rules in setting
-      Original: *settings
-      LoG: *settings
-      Wavelet: *settings
-      Square: *settings
-      SquareRoot: *settings
-      Logarithm: *settings
-      Exponential: *settings
+       regex;(.+): *settings

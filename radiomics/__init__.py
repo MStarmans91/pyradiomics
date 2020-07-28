@@ -8,55 +8,28 @@ import os
 import pkgutil
 import sys
 import tempfile
-import urllib
 
 import numpy  # noqa: F401
+from six.moves import urllib
 
-from . import base, imageoperations
-
-if sys.version_info < (2, 6, 0):
-  raise ImportError("pyradiomics > 0.9.7 requires python 2.6 or later")
+from . import imageoperations
 
 
-def debug(debug_on=True):
+def deprecated(func):
   """
-  Control level of logger and stderr output of the toolbox. By default, this output reflects module hierarchy, as child
-  loggers are created by module. This is achieved by the following line in base.py:
-  ``self.logger = logging.getLogger(self.__module__)``. To use same instance in each module, set
-  ``self.logger=logging.getLogger('radiomics')``.
-
-  At command line, turn on debugging output to stderr for all pyradiomics functions with:
-
-  ``import radiomics``\n
-  ``radiomics.debug()``
-
-  This set the level of both the logger and the handler for output to stderr to level = DEBUG. If level of logger is
-  already at level "DEBUG" or "NOTSET", level of logger is not changed.
-
-  Turn off debugging with (only changes the level of the handler for output to stderr):
-
-  ``radiomics.debug(False)``
-
-  By default, the radiomics logger is set to level "INFO" and the stderr handler to level "WARNING". Therefore a log
-  storing the extraction log messages from level "INFO" and up can be easily set up by adding an appropriate handler to
-  the radiomics logger.
+  Decorator function to mark functions as deprecated. This is used to ensure deprecated feature functions are not
+  added to the enabled features list when enabling 'all' features.
   """
-  global logger, debugging
-  if debug_on:
-    setVerbosity(logging.DEBUG)  # set the output to stderr to DEBUG
-    debugging = True
-  else:
-    setVerbosity(logging.WARNING)  # set the output to stderr to WARNING
-    debugging = False
+  func._is_deprecated = True
+  return func
 
 
 def setVerbosity(level):
   """
-  Assumes the handler added to the radiomics logger at initialization of the toolbox is not removed from the logger
-  handlers.
+  Change the amount of information PyRadiomics should print out during extraction. The lower the level, the more
+  information is printed to the output (stderr).
 
-  Using the ``level`` (Python defined logging levels) argument, determine how much PyRadiomics should print out to the
-  stderr, the following levels are possible:
+  Using the ``level`` (Python defined logging levels) argument, the following levels are possible:
 
   - 60: Quiet mode, no messages are printed to the stderr
   - 50: Only log messages of level "CRITICAL" are printed
@@ -65,9 +38,21 @@ def setVerbosity(level):
   - 20: Log messages of level "INFO" and up are printed
   - 10: Log messages of level "DEBUG" and up are printed (i.e. all log messages)
 
-  **N.B. This does not affect the level of the logger itself (e.g. if verbosity level = 3, log messages with DEBUG level
-  can still be stored in a log file if an appropriate handler is added to the logger and the logging level of the logger
-  has been set to the correct level**
+  By default, the radiomics logger is set to level "INFO" and the stderr handler to level "WARNING". Therefore a log
+  storing the extraction log messages from level "INFO" and up can be easily set up by adding an appropriate handler to
+  the radiomics logger, while the output to stderr will still only contain warnings and errors.
+
+  .. note::
+
+    This function assumes the handler added to the radiomics logger at initialization of the toolbox is not removed from
+    the logger handlers and therefore remains the first handler.
+
+  .. note::
+
+    This does not affect the level of the logger itself (e.g. if verbosity level = 3, log messages with DEBUG level can
+    still be stored in a log file if an appropriate handler is added to the logger and the logging level of the logger
+    has been set to the correct level. *Exception: In case the verbosity is set to DEBUG, the level of the logger is
+    also lowered to DEBUG. If the verbosity level is then raised again, the logger level will remain DEBUG.*
   """
   global logger, handler
   if level < 10:  # Lowest level: DEBUG
@@ -78,40 +63,6 @@ def setVerbosity(level):
   handler.setLevel(level)
   if handler.level < logger.level:  # reduce level of logger if necessary
     logger.setLevel(level)
-
-
-def enableCExtensions(enabled=True):
-  """
-  By default, calculation of GLCM, GLRLM and GLSZM is done in C, using extension ``_cmatrices.py``
-
-  If an error occurs during loading of this extension, a warning is logged and the extension is disabled,
-  matrices are then calculated in python.
-  The C extension can be disabled by calling this function as ``enableCExtensions(False)``, which forces the calculation
-  of the matrices to full-python mode.
-
-  Re-enabling use of C implementation is also done by this function, but if the extension is not loaded correctly,
-  a warning is logged and matrix calculation is forced to full-python mode.
-  """
-  global _cMatsState, logger
-  if enabled:
-    # If extensions are not yet enabled (_cMatsState == 2), check whether they are loaded (_cMatsState == 1) and if so,
-    # enable them. Otherwise, log a warning.
-    if _cMatsState == 1:  # Extension loaded but not enabled
-      logger.info("Enabling C extensions")
-      _cMatsState = 2  # Enables matrix calculation in C
-    elif _cMatsState == 0:  # _Extension not loaded correctly, do not enable matrix calculation in C and log warning
-      logger.warning("C Matrices not loaded correctly, cannot calculate matrices in C")
-  elif _cMatsState == 2:  # enabled = False, _cMatsState = 2: extensions currently enabled, disable them
-    logger.info("Disabling C extensions")
-    _cMatsState = 1
-
-
-def cMatsEnabled():
-  """
-  Returns a boolean indicating whether or not the C extensions are enabled. This function is called by the feature
-  classes to switch between C-enhanced calculation and full python mode.
-  """
-  return _cMatsState == 2
 
 
 def getFeatureClasses():
@@ -130,7 +81,7 @@ def getFeatureClasses():
   global _featureClasses
   if _featureClasses is None:  # On first call, enumerate possible feature classes and import PyRadiomics modules
     _featureClasses = {}
-    for _, mod, _ in pkgutil.iter_modules([os.path.dirname(base.__file__)]):
+    for _, mod, _ in pkgutil.iter_modules([os.path.dirname(__file__)]):
       if str(mod).startswith('_'):  # Skip loading of 'private' classes, these don't contain feature classes
         continue
       __import__('radiomics.' + mod)
@@ -138,108 +89,122 @@ def getFeatureClasses():
       attributes = inspect.getmembers(module, inspect.isclass)
       for a in attributes:
         if a[0].startswith('Radiomics'):
-          if base.RadiomicsFeaturesBase in inspect.getmro(a[1])[1:]:
-            _featureClasses[mod] = a[1]
+          for parentClass in inspect.getmro(a[1])[1:]:  # only include classes that inherit from RadiomicsFeaturesBase
+            if parentClass.__name__ == 'RadiomicsFeaturesBase':
+              _featureClasses[mod] = a[1]
+              break
 
   return _featureClasses
 
 
-def getInputImageTypes():
+def getImageTypes():
   """
-  Returns a list of possible input image types. This function finds the image types dynamically by matching the
-  signature ("get<inputImage>Image") against functions defined in :ref:`imageoperations
-  <radiomics-imageoperations-label>`. Returns a list containing available input image names (<inputImage> part of the
-  corresponding function name).
+  Returns a list of possible image types (i.e. the possible filters and the "Original", unfiltered image type). This
+  function finds the image types dynamically by matching the signature ("get<imageType>Image") against functions defined
+  in :ref:`imageoperations <radiomics-imageoperations-label>`. Returns a list containing available image type names
+  (<imageType> part of the corresponding function name).
 
   This iteration only occurs once, at initialization of the toolbox. Found results are stored and returned on subsequent
   calls.
   """
-  global _inputImages
-  if _inputImages is None:  # On first cal, enumerate possible input image types (original and any filters)
-    _inputImages = [member[3:-5] for member in dir(imageoperations)
-                    if member.startswith('get') and member.endswith("Image")]
+  global _imageTypes
+  if _imageTypes is None:  # On first cal, enumerate possible input image types (original and any filters)
+    _imageTypes = [member[3:-5] for member in dir(imageoperations)
+                   if member.startswith('get') and member.endswith("Image")]
 
-  return _inputImages
+  return _imageTypes
 
 
-def getTestCase(testCase, repoDirectory=None):
+def getTestCase(testCase, dataDirectory=None):
   """
-  This function provides an image and mask for testing PyRadiomics. One of five test cases can be selected:
+  This function provides an image and mask for testing PyRadiomics. One of seven test cases can be selected:
 
    - brain1
    - brain2
    - breast1
    - lung1
    - lung2
+   - test_wavelet_64x64x64
+   - test_wavelet_37x37x37
 
-  If the repository is available locally (including all five test cases, the path to the root folder of the repository
-  can be specified in ``repoDirectory``, preventing unnecessary downloads. If the repository is not found, or the
-  repository does not contain the requested test case, PyRadiomics checks if it is run in development mode (directly
-  from the source code in the repository), and if so, if it can find the test case relative to it's own location.
+  Checks if the test case (consisting of an image and mask file with signature <testCase>_image.nrrd and
+  <testCase>_label.nrrd, respectively) is available in the ``dataDirectory``. If not available, the testCase is
+  downloaded from the GitHub repository and stored in the ``dataDirectory``. Also creates the ``dataDirectory`` if
+  necessary.
+  If no ``dataDirectory`` has been specified, PyRadiomics will use a temporary directory: <TEMPDIR>/pyradiomics/data.
 
-  If the requested test case could not be found in the repository, PyRadiomics downloads the test case from the GitHub
-  repository and stores it in temporary files. If the test case was already downloaded, this is returned instead.
+  If the test case has been found or downloaded successfully, this function returns a tuple of two strings:
+  ``(path/to/image.nrrd, path/to/mask.nrrd)``. In case of an error ``(None, None)`` is returned.
 
-  Returns a tuple of two strings: ``(path/to/image.nrrd, path/to/mask.nrrd)``
+  .. note::
+    To get the testcase with the corresponding single-slice label, append "_2D" to the testCase.
+
   """
-  global logger
-  if testCase not in ['brain1', 'brain2', 'breast1', 'lung1', 'lung2']:
-    logger.error('Testcase "%s" not recognized!', testCase)
-    return None, None
+  global logger, testCases
+  label2D = False
+  testCase = testCase.lower()
+  if testCase.endswith('_2d'):
+    label2D = True
+    testCase = testCase[:-3]
+
+  if testCase not in testCases:
+    raise ValueError('Testcase "%s" not recognized!' % testCase)
 
   logger.debug('Getting test case %s', testCase)
 
-  # Use test cases included in the repository. If PyRadiomics is run from an installed version, the location of the
-  # repository needs to be specified
-  logger.debug('Looking for test case in repository')
-  if repoDirectory is not None:
-    dataDir = os.path.join(repoDirectory, 'data')
-    imageFile = os.path.join(dataDir, '%s_image.nrrd' % testCase)
-    maskFile = os.path.join(dataDir, '%s_label.nrrd' % testCase)
-    if os.path.isfile(imageFile) and os.path.isfile(maskFile):
-      logger.debug('Test case found in repository (repository specified)')
-      return imageFile, maskFile
+  if dataDirectory is None:
+    dataDirectory = os.path.join(tempfile.gettempdir(), 'pyradiomics', 'data')
+    logger.debug('No data directory specified, using temporary directory "%s"', dataDirectory)
 
-  # No repository directory specified, check if running in development mode (code run from repository)
-  logger.debug('Repository not specified or test case not found, checking if running in development mode')
-  # This folder exists if radiomics is run from the repository:
-  dataDir = os.path.join(os.path.basename(base.__file__), '..', 'data')
-  imageFile = os.path.join(dataDir, '%s_image.nrrd' % testCase)
-  maskFile = os.path.join(dataDir, '%s_label.nrrd' % testCase)
-  if os.path.isfile(imageFile) and os.path.isfile(maskFile):
-    logger.debug('Test case found in repository (running development mode)')
-    return imageFile, maskFile
+  im_name = '%s_image.nrrd' % testCase
+  ma_name = '%s_label%s.nrrd' % (testCase, '_2D' if label2D else '')
 
-  # Data folder not found (most likely running from installed version). Check if test case has been downloaded.
-  logger.debug('Test case or repository not found, checking temporary data')
-  dataDir = os.path.join(tempfile.gettempdir(), 'pyradiomics', 'data')
-  imageFile = os.path.join(dataDir, '%s_image.nrrd' % testCase)
-  maskFile = os.path.join(dataDir, '%s_label.nrrd' % testCase)
-  if os.path.isfile(imageFile) and os.path.isfile(maskFile):
-    logger.debug('Test case already downloaded')
-    return imageFile, maskFile
+  def get_or_download(fname):
+    target = os.path.join(dataDirectory, fname)
+    if os.path.exists(target):
+      logger.debug('File %s already downloaded', fname)
+      return target
 
-  logger.info("Test case not available locally, downloading test case...")
+    # Test case file not found, so try to download it
+    logger.info("Test case file %s not available locally, downloading from github...", fname)
 
-  # Testcase not found in temporary files, download them. First check if the folder is available
-  if not os.path.isdir(os.path.join(tempfile.gettempdir(), 'pyradiomics')):
-    os.mkdir(os.path.join(tempfile.gettempdir(), 'pyradiomics'))
-  if not os.path.isdir(dataDir):
-    logger.debug('Creating temporary directory: %s', dataDir)
-    os.mkdir(dataDir)
+    # First check if the folder is available
+    if not os.path.isdir(dataDirectory):
+      logger.debug('Creating data directory: %s', dataDirectory)
+      os.makedirs(dataDirectory)
 
-  # Download the test case files (image and label)
-  url = r'https://github.com/Radiomics/pyradiomics/raw/master/data/%s_%s.nrrd'
-  try:
-    urllib.urlretrieve(url % (testCase, 'image'), imageFile)
-    urllib.urlretrieve(url % (testCase, 'label'), maskFile)
-  except Exception:
-    logger.error('Download failed!', exc_info=True)
-    return None, None
+    # Download the test case files (image and label)
+    url = r'https://github.com/Radiomics/pyradiomics/releases/download/v1.0/%s' % fname
 
-  logger.info('Test case %s downloaded', testCase)
+    logger.debug('Retrieving file at %s', url)
+    _, headers = urllib.request.urlretrieve(url, target)
+
+    if headers.get('status', '') == '404 Not Found':
+      raise ValueError('Unable to download image file at %s!', url)
+
+    logger.info('File %s downloaded', fname)
+    return target
+
+  logger.debug('Getting Image file')
+  imageFile = get_or_download(im_name)
+
+  logger.debug('Getting Mask file')
+  maskFile = get_or_download(ma_name)
 
   return imageFile, maskFile
+
+
+def getParameterValidationFiles():
+  """
+  Returns file locations for the parameter schema and custom validation functions, which are needed when validating
+  a parameter file using ``PyKwalify.core``.
+  This functions returns a tuple with the file location of the schema as first and python script with custom validation
+  functions as second element.
+  """
+  dataDir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'schemas'))
+  schemaFile = os.path.join(dataDir, 'paramSchema.yaml')
+  schemaFuncs = os.path.join(dataDir, 'schemaFuncs.py')
+  return schemaFile, schemaFuncs
 
 
 class _DummyProgressReporter(object):
@@ -268,10 +233,10 @@ class _DummyProgressReporter(object):
     pass  # Nothing needs to be closed or handled, so just specify 'pass'
 
 
-def _getProgressReporter(*args, **kwargs):
+def getProgressReporter(*args, **kwargs):
   """
-  This function returns an instance of the progressReporter, or, if it is not set (None), returns a dummy progress
-  reporter.
+  This function returns an instance of the progressReporter, if it is set and the logging level is defined at level INFO
+  or DEBUG. In all other cases a dummy progress reporter is returned.
 
   To enable progress reporting, the progressReporter variable should be set to a class object (NOT an instance), which
   fits the following signature:
@@ -286,11 +251,11 @@ def _getProgressReporter(*args, **kwargs):
   `__next__` function of the iterable (i.e. `return self.iterable.__next__()`). Any prints/progress reporting calls can
   then be inserted in this function prior to the return statement.
   """
-  global progressReporter
-  if progressReporter is None:
-    return _DummyProgressReporter(*args, **kwargs)
-  else:
+  global handler, progressReporter
+  if progressReporter is not None and logging.NOTSET < handler.level <= logging.INFO:
     return progressReporter(*args, **kwargs)
+  else:
+    return _DummyProgressReporter(*args, **kwargs)
 
 progressReporter = None
 
@@ -305,28 +270,37 @@ handler = logging.StreamHandler()
 formatter = logging.Formatter("%(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-debug(False)  # force level=WARNING for stderr handler, in case logging default is set differently (issue 102)
+# force level=WARNING for stderr handler, in case logging default is set differently (issue 102)
+setVerbosity(logging.WARNING)
 
-# 2. Attempt to load and enable the C extensions. If this fails, revert to full-python mode
-_cMatsState = 0  # Indicates status of C extensions: 0 = not loaded, 1 = loaded but not enabled, 2 = enabled
+# 2. Define the available test cases
+testCases = ('brain1', 'brain2', 'breast1', 'lung1', 'lung2', 'test_wavelet_64x64x64', 'test_wavelet_37x37x37')
+
+# 3. Attempt to load and enable the C extensions.
+cMatrices = None  # set cMatrices to None to prevent an import error in the feature classes.
+cShape = None
 try:
-  from radiomics import _cmatrices as cMatrices
-  from radiomics import _cshape as cShape
-  _cMatsState = 1
-  enableCExtensions()
-except Exception:
-  logger.warning("Error loading C extensions, switching to python calculation:", exc_info=True)
-  cMatrices = None  # set cMatrices to None to prevent an import error in the feature classes.
-  cShape = None
+  from radiomics import _cmatrices as cMatrices  # noqa: F401
+  from radiomics import _cshape as cShape  # noqa: F401
+except ImportError as e:
+  if os.path.isdir(os.path.join(os.path.dirname(__file__), '..', 'data')):
+    # It looks like PyRadiomics is run from source (in which case "setup.py develop" must have been run)
+    logger.critical('Apparently running from root, but unable to load C extensions... '
+                    'Did you run "python setup.py build_ext --inplace"?')
+    raise Exception('Apparently running from root, but unable to load C extensions... '
+                    'Did you run "python setup.py build_ext --inplace"?')
+  else:
+    logger.critical('Error loading C extensions', exc_info=True)
+    raise e
 
-# 3. Enumerate implemented feature classes and input image types available in PyRadiomics
+# 4. Enumerate implemented feature classes and input image types available in PyRadiomics
 _featureClasses = None
-_inputImages = None
+_imageTypes = None
 getFeatureClasses()
-getInputImageTypes()
+getImageTypes()
 
-# 4. Set the version using the versioneer scripts
-from ._version import get_versions
+# 5. Set the version using the versioneer scripts
+from ._version import get_versions  # noqa: I202
 
 __version__ = get_versions()['version']
 del get_versions

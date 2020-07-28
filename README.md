@@ -1,35 +1,51 @@
+# pyradiomics v3.0
 
-[![Appveyor](https://ci.appveyor.com/api/projects/status/tw69xbbeyluk7fl7/branch/master?svg=true)](https://ci.appveyor.com/project/Radiomics/pyradiomics/branch/master)
+## Build Status
 
-[![Circle CI](https://circleci.com/gh/Radiomics/pyradiomics.svg?style=svg&circle-token=a4748cf0de5fad2c12bc93a485282378551c3584)](https://circleci.com/gh/Radiomics/pyradiomics)
+| Linux                          | macOS                         | Windows                       |
+|--------------------------------|-------------------------------|-------------------------------|
+| [![][circleci]][circleci-lnk]  | [![][travisci]][travisci-lnk] | [![][appveyor]][appveyor-lnk] |
 
-[![Travis CI](https://travis-ci.org/Radiomics/pyradiomics.svg?branch=master)](https://travis-ci.org/Radiomics/pyradiomics)
 
-# pyradiomics v1.1.1
+[appveyor]: https://ci.appveyor.com/api/projects/status/tw69xbbeyluk7fl7/branch/master?svg=true
+[appveyor-lnk]: https://ci.appveyor.com/project/Radiomics/pyradiomics/branch/master
+
+[circleci]: https://circleci.com/gh/Radiomics/pyradiomics.svg?style=svg&circle-token=a4748cf0de5fad2c12bc93a485282378551c3584
+[circleci-lnk]: https://circleci.com/gh/Radiomics/pyradiomics
+
+[travisci]: https://travis-ci.org/Radiomics/pyradiomics.svg?branch=master
+[travisci-lnk]: https://travis-ci.org/Radiomics/pyradiomics
 
 ## Radiomics feature extraction in Python
-
 This is an open-source python package for the extraction of Radiomics features from medical imaging.
 
 With this package we aim to establish a reference standard for Radiomic Analysis, and provide a tested and maintained
 open-source platform for easy and reproducible Radiomic Feature extraction. By doing so, we hope to increase awareness
 of radiomic capabilities and expand the community.
 
-The platform supports both the feature extraction in 2D and 3D.
+The platform supports both the feature extraction in 2D and 3D and can be used to calculate single values per feature
+for a region of interest ("segment-based") or to generate feature maps ("voxel-based"). 
 
-**If you publish any work which uses this package, please cite the following publication:**\
-*Joost JM van Griethuysen, Andriy Fedorov, Chintan Parmar, Ahmed Hosny, Nicole Aucoin, Vivek Narayan, Regina GH 
-Beets-Tan, Jean-Christophe Fillion-Robin, Steve Pieper, Hugo JWL Aerts, “Computational Radiomics System to Decode the
-Radiographic Phenotype”; Submitted 2017*
+**Not intended for clinical use.**
+
+**If you publish any work which uses this package, please cite the following publication:**
+*van Griethuysen, J. J. M., Fedorov, A., Parmar, C., Hosny, A., Aucoin, N., Narayan, V., Beets-Tan, R. G. H.,
+Fillion-Robin, J. C., Pieper, S.,  Aerts, H. J. W. L. (2017). Computational Radiomics System to Decode the Radiographic
+Phenotype. Cancer Research, 77(21), e104–e107. https://doi.org/10.1158/0008-5472.CAN-17-0339*
+
+### Join the Community!
+Join the PyRadiomics community on google groups [here](https://groups.google.com/forum/#!forum/pyradiomics).
 
 ### Feature Classes
 Currently supports the following feature classes:
 
  - First Order Statistics
- - Shape-based
+ - Shape-based (2D and 3D)
  - Gray Level Cooccurence Matrix (GLCM)
  - Gray Level Run Length Matrix (GLRLM)
  - Gray Level Size Zone Matrix (GLSZM)
+ - Gray Level Dependece Matrix (GLDM)
+ - Neighboring Gray Tone Difference Matrix (NGTDM)
 
 ### Filter Classes
 Aside from the feature classes, there are also some built-in optional filters:
@@ -40,6 +56,8 @@ Aside from the feature classes, there are also some built-in optional filters:
 - Square Root
 - Logarithm
 - Exponential
+- Gradient (Magnitude)
+- Local Binary Pattern (LBP) 2D / 3D
 
 ### Supporting reproducible extraction
 Aside from calculating features, the pyradiomics package includes provenance information in the
@@ -47,7 +65,6 @@ output. This information contains information on used image and mask, as well as
 and filters, thereby enabling fully reproducible feature extraction.
 
 ### Documentation
-
 For more information, see the sphinx generated documentation available [here](http://pyradiomics.readthedocs.io/).
 
 Alternatively, you can generate the documentation by checking out the master branch and running from the root directory:
@@ -59,21 +76,23 @@ The documentation can then be viewed in a browser by opening `PACKAGE_ROOT\build
 Furthermore, an instruction video is available [here](http://radiomics.io/pyradiomics.html).
 
 ### Installation
+PyRadiomics is OS independent and compatible with Python >= 3.5. Pre-built binaries are available on
+PyPi and Conda. To install PyRadiomics, ensure you have python
+installed and run:
 
-PyRadiomics is OS independent and compatible with both Python 2.7 and Python >=3.4.
-To install this package on unix like systems run the following commands from the root directory:
+    `python -m pip install pyradiomics`
 
-    python -m pip install -r requirements.txt
-    python setup.py install
-
-Detailed installation instructions, as well as instructions for installing PyRadiomics on Windows are available in the 
+Detailed installation instructions, as well as instructions for building PyRadiomics from source, are available in the 
 [documentation](http://pyradiomics.readthedocs.io/en/latest/installation.html).
 
 ### Docker
+PyRadiomics also supports [Dockers](https://www.docker.com/).  Currently, 2 dockers are available:
 
-PyRadiomics also supports [Dockers](https://www.docker.com/).  Currently, the only docker available is a [Jupyter notebook](http://jupyter.org/) with PyRadiomics pre-installed with example Notebooks. To build the Docker:
+The first one is a [Jupyter notebook](http://jupyter.org/) with PyRadiomics pre-installed with example Notebooks. 
 
-    docker build -t radiomics/notebook .
+To get the Docker:
+
+    docker pull radiomics/pyradiomics:latest
 
 The `radiomics/notebook` Docker has an exposed volume (`/data`) that can be mapped to the host system directory.  For example, to mount the current directory:
 
@@ -85,33 +104,42 @@ or for a less secure notebook, skip the randomly generated token
 
 and open the local webpage at http://localhost:8888/ with the current directory at http://localhost:8888/tree/data.
 
-### Usage
+The second is a docker which exposes the PyRadiomics CLI interface. To get the CLI-Docker:
 
+    docker pull radiomics/pyradiomics:CLI
+
+You can then use the PyRadiomics CLI as follows:
+
+    docker run radiomics/pyradiomics:CLI --help
+
+For more information on using docker, see
+[here](https://pyradiomics.readthedocs.io/en/latest/installation.html#use-pyradiomics-docker)
+
+### Usage
 PyRadiomics can be easily used in a Python script through the `featureextractor`
-module. Furthermore, PyRadiomics provides two commandline scripts, `pyradiomics`
-and `pyradiomicsbatch`, for single image extraction and batchprocessing, respectively.
-Finally, a convenient front-end interface is provided as the 'Radiomics'
+module. Furthermore, PyRadiomics provides a commandline script, `pyradiomics`, for both single image extraction and 
+batchprocessing. Finally, a convenient front-end interface is provided as the 'Radiomics'
 extension for 3D Slicer, available [here](https://github.com/Radiomics/SlicerRadiomics).
 
 ### 3rd-party packages used in pyradiomics:
-
  - SimpleITK (Image loading and preprocessing)
  - numpy (Feature calculation)
  - PyWavelets (Wavelet filter)
  - pykwalify (Enabling yaml parameters file checking)
- - tqdm (Progressbar)
  - six (Python 3 Compatibility)
- - sphinx (Generating documentation)
- - sphinx_rtd_theme (Template for documentation)
- - nose-parameterized (Testing)
+ - scipy (Only for LBP filter, install separately to enable this filter)
+ - scikit-image (Only for LBP filter, install separately to enable this filter)
+ - trimesh (Only for LBP filter, install separately to enable this filter)
 
 See also the [requirements file](requirements.txt).
 
-### WIP
- - Implementation of this package as an [extension](https://github.com/Radiomics/SlicerRadiomics) to [3D Slicer](slicer.org)
+### 3D Slicer
+PyRadiomics is also available as an [extension](https://github.com/Radiomics/SlicerRadiomics) to [3D Slicer](slicer.org). 
+Download and install the 3D slicer [nightly build](http://download.slicer.org/), the extension is then available in the
+extension manager under "SlicerRadiomics".
 
 ### License
-This package is covered by the open source [3D Slicer License](LICENSE.txt).
+This package is covered by the open source [3-clause BSD License](LICENSE.txt).
 
 ### Developers
  - [Joost van Griethuysen](https://github.com/JoostJM)<sup>1,3,4</sup>
@@ -130,11 +158,10 @@ This package is covered by the open source [3D Slicer License](LICENSE.txt).
 <sup>6</sup>Isomics
 
 ### Contact
+We are happy to help you with any questions. Please contact us on the [Radiomics community section of the 3D Slicer Discourse](https://discourse.slicer.org/c/community/radiomics/23).
 
-We are happy to help you with any questions. Please contact us on the [pyradiomics email list](https://groups.google.com/forum/#!forum/pyradiomics).
-
-We welcome contributions to PyRadiomics. Please read the [contributing guidelines](CONTRIBUTING.md) on how to contribute
-to PyRadiomics.
+We welcome contributions to PyRadiomics. Please read the [contributing guidelines](CONTRIBUTING.rst) on how to
+contribute to PyRadiomics.
 
 **This work was supported in part by the US National Cancer Institute grant 
 5U24CA194354, QUANTITATIVE RADIOMICS SYSTEM DECODING THE TUMOR PHENOTYPE.**

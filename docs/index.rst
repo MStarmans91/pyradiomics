@@ -9,17 +9,28 @@ Welcome to pyradiomics documentation!
 This is an open-source python package for the extraction of Radiomics features from medical imaging.
 With this package we aim to establish a reference standard for Radiomic Analysis, and provide a tested and maintained
 open-source platform for easy and reproducible Radiomic Feature extraction. By doing so, we hope to increase awareness
-of radiomic capabilities and expand the community. The platform supports both the feature extraction in 2D and 3D.
+of radiomic capabilities and expand the community. The platform supports both the feature extraction in 2D and 3D and
+can be used to calculate single values per feature for a region of interest ("segment-based") or to generate feature
+maps ("voxel-based").
 
 **If you publish any work which uses this package, please cite the following publication:**
-*Joost JM van Griethuysen, Andriy Fedorov, Chintan Parmar, Ahmed Hosny, Nicole Aucoin, Vivek Narayan, Regina GH
-Beets-Tan, Jean-Christophe Fillion-Robin, Steve Pieper, Hugo JWL Aerts, “Computational Radiomics System to Decode the
-Radiographic Phenotype”; Submitted 2017*
+*van Griethuysen, J. J. M., Fedorov, A., Parmar, C., Hosny, A., Aucoin, N., Narayan, V., Beets-Tan, R. G. H.,
+Fillon-Robin, J. C., Pieper, S.,  Aerts, H. J. W. L. (2017). Computational Radiomics System to Decode the Radiographic
+Phenotype. Cancer Research, 77(21), e104–e107. `https://doi.org/10.1158/0008-5472.CAN-17-0339 <https://doi.org/10.1158/0008-5472.CAN-17-0339>`_*
 
 .. note::
 
    This work was supported in part by the US National Cancer Institute grant
    5U24CA194354, QUANTITATIVE RADIOMICS SYSTEM DECODING THE TUMOR PHENOTYPE.
+
+.. warning::
+
+   Not intended for clinical use.
+
+Join the Community!
+-------------------
+Join the PyRadiomics community on google groups `here <https://groups.google.com/forum/#!forum/pyradiomics>`_.
+
 
 Table of Contents
 -----------------
@@ -34,23 +45,31 @@ Table of Contents
 
    installation
    usage
+   customization
    radiomics
    features
+   removedfeatures
+   contributing
    developers
+   labs
    FAQs <faq>
+   changes
 
 Feature Classes
 ---------------
 
 Currently supports the following feature classes:
 
-* :ref:`First Order Statistics <radiomics-firstorder-label>`
-* :ref:`Shape-based <radiomics-shape-label>`
-* :ref:`Gray Level Cooccurence Matrix <radiomics-glcm-label>` (GLCM)
-* :ref:`Gray Level Run Length Matrix <radiomics-glrlm-label>` (GLRLM)
-* :ref:`Gray Level Size Zone Matrix <radiomics-glszm-label>` (GLSZM)
+* :py:class:`First Order Statistics <radiomics.firstorder.RadiomicsFirstOrder>`
+* :py:class:`Shape-based (3D) <radiomics.shape.RadiomicsShape>`
+* :py:class:`Shape-based (2D) <radiomics.shape2D.RadiomicsShape2D>`
+* :py:class:`Gray Level Cooccurence Matrix <radiomics.glcm.RadiomicsGLCM>` (GLCM)
+* :py:class:`Gray Level Run Length Matrix <radiomics.glrlm.RadiomicsGLRLM>` (GLRLM)
+* :py:class:`Gray Level Size Zone Matrix <radiomics.glszm.RadiomicsGLSZM>` (GLSZM)
+* :py:class:`Neigbouring Gray Tone Difference Matrix <radiomics.ngtdm.RadiomicsNGTDM>` (NGTDM)
+* :py:class:`Gray Level Dependence Matrix <radiomics.gldm.RadiomicsGLDM>` (GLDM)
 
-On average, Pyradiomics extracts :math:`\approx 1300` features per image, which consist of the 16 shape descriptors and
+On average, Pyradiomics extracts :math:`\approx 1500` features per image, which consist of the 16 shape descriptors and
 features extracted from original and derived images (LoG with 5 sigma levels, 1 level of Wavelet decomposistions
 yielding 8 derived images and images derived using Square, Square Root, Logarithm and Exponential filters).
 
@@ -67,6 +86,9 @@ Aside from the feature classes, there are also some built-in optional filters:
 * :py:func:`Square Root <radiomics.imageoperations.getSquareRootImage>`
 * :py:func:`Logarithm <radiomics.imageoperations.getLogarithmImage>`
 * :py:func:`Exponential <radiomics.imageoperations.getExponentialImage>`
+* :py:func:`Gradient <radiomics.imageoperations.getGradientImage>`
+* :py:func:`Local Binary Pattern (2D) <radiomics.imageoperations.getLBP2DImage>`
+* :py:func:`Local Binary Pattern (3D) <radiomics.imageoperations.getLBP3DImage>`
 
 For more information, see also :ref:`radiomics-imageoperations-label`.
 
@@ -85,31 +107,21 @@ and filters, thereby enabling fully reproducible feature extraction. For more in
 * numpy (Feature calculation)
 * PyWavelets (Wavelet filter)
 * pykwalify (Enabling yaml parameters file checking)
-* tqdm (Progressbar)
 * six (Python 3 Compatibility)
-* sphinx (Generating documentation)
-* sphinx_rtd_theme (Template for documentation)
-* nose-parameterized (Testing)
 
 See also the `requirements file <https://github.com/Radiomics/pyradiomics/blob/master/requirements.txt>`_.
 
 Installation
 ------------
 
-PyRadiomics is OS independent and compatible with both Python 2.7 and Python >=3.4.
+PyRadiomics is OS independent and compatible with and Python >=3.5. Pre-built binaries are available on
+PyPi and Conda. To install PyRadiomics, ensure you have python
+installed and run:
 
-* Clone the repository
+*  ``python -m pip install pyradiomics``
 
-  * ``git clone git://github.com/Radiomics/pyradiomics``
-
-* Install on your system (Linux, Mac OSX), with prerequisites:
-
-  * ``cd pyradiomics``
-  * ``python -m pip install -r requirements.txt``
-  * ``python setup.py install``
-
-* For more detailed installation instructions and installation on Windows see
-  :ref:`Installation Details<installation-label>`
+For more detailed installation instructions and building from source,
+see :ref:`radiomics-installation-label` section.
 
 Pyradiomics Indices and Tables
 ------------------------------
@@ -121,7 +133,7 @@ Pyradiomics Indices and Tables
 License
 -------
 
-This package is covered by the open source `3D Slicer License <https://github.com/Radiomics/pyradiomics/blob/master/LICENSE.txt>`_.
+This package is covered by the open source `3-clause BSD License <https://github.com/Radiomics/pyradiomics/blob/master/LICENSE.txt>`_.
 
 Developers
 ----------
@@ -133,7 +145,7 @@ Developers
  - `Ahmed Hosny <https://github.com/ahmedhosny>`_:sup:`1`
  - `Steve Pieper <https://github.com/pieper>`_:sup:`6`
  - `Hugo Aerts (PI) <https://github.com/hugoaerts>`_:sup:`1,2`
- 
+
 :sup:`1`\ Department of Radiation Oncology, Dana-Farber Cancer Institute, Brigham and Women's Hospital, Harvard Medical School, Boston, MA,
 :sup:`2`\ Department of Radiology, Brigham and Women's Hospital, Harvard Medical School, Boston, MA
 :sup:`3`\ Department of Radiology, Netherlands Cancer Institute, Amsterdam, The Netherlands,
@@ -143,9 +155,8 @@ Developers
 
 Contact
 -------
-We are happy to help you with any questions. Please contact us on the `pyradiomics email list <https://groups.google.com/forum/#!forum/pyradiomics>`_.
+We are happy to help you with any questions. Please contact us on the `Radiomics community section of the 3D Slicer Discourse <https://discourse.slicer.org/c/community/radiomics/23>`_.
 
 We'd welcome your contributions to PyRadiomics. Please read the
-`contributing guidelines <https://github.com/Radiomics/pyradiomics/blob/master/CONTRIBUTING.md>`_ on how to contribute
-to PyRadiomics. Information on adding / customizing feature classes and filters can be found in the :ref:`developers`
-section.
+:ref:`contributing guidelines <radiomics-contributing-label>` on how to contribute to PyRadiomics. Information on
+adding / customizing feature classes and filters can be found in the :ref:`radiomics-developers` section.
